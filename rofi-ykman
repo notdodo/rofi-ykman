@@ -3,11 +3,17 @@
 # rofi-ykman
 # Yubikey oath utility
 
-#2019 nukeop
+#2022 notdodo
+
+OUT="$(mktemp)"
+
+get_code() {
+  ykman oath accounts code "$1" > "$2" 2>&1
+}
 
 if [ ! "$(ykman info)" ]
 then
-    notify-send "rofi-ykman" "Yubikey not detected." -a "rofi-ykman"
+    dunstify "rofi-ykman" "YubiKey not detected." -a "rofi-ykman"
     exit 1
 fi
 
@@ -15,7 +21,28 @@ OPTIONS=$(ykman oath accounts list)
 LAUNCHER="rofi -dmenu -i -p YubikeyOATH"
 
 option=`echo "${OPTIONS/, TOTP/\n}" | $LAUNCHER`
-code=$(ykman oath accounts code "$option")
+if [ ${#option} -le 1 ]; then
+  rm $OUT
+  exit
+fi
+
+get_code "$option" "$OUT" &
+sleep 0.5
+if grep -q "Touch your" $OUT; then
+  dunstify "rofi-ykman" "Touch your YubiKey" -a "rofi-ykman"
+  while true; do
+    if grep -q "$option" $OUT; then
+      sleep 0.5
+      break
+    fi
+  done
+else
+  ykman oath accounts code "$option" > $OUT
+fi 
+
+code=$(cat $OUT | grep "$option")
+rm $OUT
+
 IFS=', ' read -r -a code <<< "$code"
 if [ $XDG_SESSION_TYPE == "wayland" ]
 then
