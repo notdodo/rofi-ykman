@@ -1,16 +1,22 @@
 # rofi-ykman
+
 Yubikey manager script for rofi
 
 ## Dependencies
+
 * ykman for Yubikey
 * rofi
 * xclip
-* libnotify client for showing notifications (optional)
+* dunst
 
 ## Usage
-Assuming you copy this script to ~/.config/rofi/rofi-ykman, add this to your i3 config:
-```
-bindsym --release $mod+o exec --no-startup-id "~/.config/rofi/rofi-ykman"
+
+Add the key binding to your `sxhkdrc` file:
+
+```ini
+# Yubikey Account Manager
+super + shift + p
+    ~/.config/rofi/rofi-ykman/rofi-ykman
 ```
 
-After pressing $mod+o, you will see a rofi prompt listing available TOTP keys. Choose one and the code will be copied to your clipboard. If you forgot to insert yubikey, you'll get a notification saying so.
+After pressing `super + shift + p`, you will see a rofi prompt listing all available TOTP keys. Choose one and the code will be copied to your clipboard; if the token requires the touch of the key a notification will appear.
