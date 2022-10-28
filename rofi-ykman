@@ -1,61 +1,70 @@
 #!/usr/bin/env bash
-
 # rofi-ykman
 # Yubikey oath utility
 
 #2022 notdodo
 
-OUT="$(mktemp)"
+LAUNCHER="rofi -dmenu -i -p YubikeyOATH"
+
+check_yubikey() {
+  if [ ! "$(ykman info)" ]
+  then
+      dunstify "rofi-ykman" "YubiKey not detected." -a "rofi-ykman"
+      exit 1
+  fi
+}
 
 get_code() {
   ykman oath accounts code "$1" > "$2" 2>&1
 }
 
-if [ ! "$(ykman info)" ]
-then
-    dunstify "rofi-ykman" "YubiKey not detected." -a "rofi-ykman"
-    exit 1
-fi
+list_accounts() {
+  ykman oath accounts list
+}
 
-OPTIONS=$(ykman oath accounts list)
-LAUNCHER="rofi -dmenu -i -p YubikeyOATH"
+start_rofi() {
+  check_yubikey
+  ACCOUNTS=$(list_accounts)
+  OPTION=$(echo "${ACCOUNTS/, TOTP/\n}" | ${LAUNCHER})
+  if [ ${#OPTION} -le 1 ]; then
+    exit
+  fi
+}
 
-option=`echo "${OPTIONS/, TOTP/\n}" | $LAUNCHER`
-if [ ${#option} -le 1 ]; then
-  rm $OUT
-  exit
-fi
-
-get_code "$option" "$OUT" &
-sleep 0.5
-if grep -q "Touch your" $OUT; then
-  dunstify "rofi-ykman" "Touch your YubiKey" -a "rofi-ykman"
+check_code() {
+  OPTION=$1
+  TEMP_OUT=$2
   while true; do
-    if grep -q "$option" $OUT; then
-      sleep 0.5
+    sleep 0.2
+    if grep -q "Touch your" "${TEMP_OUT}"; then
+      dunstify "rofi-ykman" "Touch your YubiKey" -a "rofi-ykman"
+      sleep 2
+    fi
+    if grep -q "${OPTION}" "${TEMP_OUT}"; then
+      dunstify "rofi-ykman" "Check your clipboard" -a "rofi-ykman"
+      break
+    fi
+    if grep -q "ERROR" "${TEMP_OUT}"; then
+      rm "${TEMP_OUT}"
       break
     fi
   done
-else
-  ykman oath accounts code "$option" > $OUT
-fi 
+}
 
-code=$(cat $OUT | grep "$option")
-rm $OUT
+### MAIN ###
+start_rofi
+TEMP_OUT="$(mktemp)"
+get_code "${OPTION}" "${TEMP_OUT}" &
+check_code "${OPTION}" "${TEMP_OUT}"
 
-IFS=', ' read -r -a code <<< "$code"
-if [ $XDG_SESSION_TYPE == "wayland" ]
+OTP_CODE=$(grep "${OPTION}" "${TEMP_OUT}")
+rm "${TEMP_OUT}"
+
+IFS=', ' read -r -a OTP_CODE <<< "${OTP_CODE}"
+if [ "${XDG_SESSION_TYPE}" == "wayland" ]
 then
-		cliptool=wl-copy
-    typer="wtype -"
-else
-		cliptool="xclip -selection clipboard"
-    typer="xargs xdotool type"
+	CLIPTOOL="wl-copy"
+else 
+  CLIPTOOL="xclip -selection clipboard"
 fi
-if [ "$1" == "type" ]
-then
-    action=$typer
-else
-    action=$cliptool
-fi
-echo "${code[-1]}" | $action
+echo "${OTP_CODE[-1]}" | ${CLIPTOOL}
